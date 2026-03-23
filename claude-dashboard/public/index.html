@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #21262d;
+      --border: #30363d;
+      --accent: #d97757;
+      --accent2: #58a6ff;
+      --green: #3fb950;
+      --yellow: #e3b341;
+      --red: #f85149;
+      --gray: #8b949e;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --input-color: #79c0ff;
+      --output-color: #3fb950;
+      --cache-read-color: #d2a8ff;
+      --cache-create-color: #ffa657;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+      font-size: 16px;
+    }
+
+    .logo-icon {
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(135deg, var(--accent), #e89b7a);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    .header-meta {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .ws-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--gray);
+      transition: background 0.3s;
+      display: inline-block;
+      margin-right: 4px;
+    }
+    .ws-dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .ws-dot.error { background: var(--red); }
+
+    /* ── Main layout ── */
+    main {
+      padding: 24px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    /* ── Stats bar ── */
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 20px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat-value.green { color: var(--green); }
+    .stat-value.accent { color: var(--accent); }
+    .stat-value.blue { color: var(--accent2); }
+
+    /* ── Section header ── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+    }
+
+    /* ── Session grid ── */
+    .sessions-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
+      gap: 16px;
+    }
+
+    /* ── Session card ── */
+    .session-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .session-card.running {
+      border-color: rgba(63, 185, 80, 0.4);
+      box-shadow: 0 0 0 1px rgba(63, 185, 80, 0.1), inset 0 0 30px rgba(63, 185, 80, 0.03);
+    }
+
+    .session-card.idle {
+      border-color: rgba(227, 179, 65, 0.3);
+    }
+
+    .session-card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      gap: 12px;
+    }
+
+    .session-id {
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 12px;
+      color: var(--accent2);
+      word-break: break-all;
+      flex: 1;
+    }
+
+    .status-badge {
+      flex-shrink: 0;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .status-badge::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .status-badge.running {
+      background: rgba(63, 185, 80, 0.15);
+      color: var(--green);
+      border: 1px solid rgba(63, 185, 80, 0.3);
+    }
+
+    .status-badge.running::before {
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+
+    .status-badge.idle {
+      background: rgba(227, 179, 65, 0.12);
+      color: var(--yellow);
+      border: 1px solid rgba(227, 179, 65, 0.25);
+    }
+
+    .status-badge.stopped {
+      background: rgba(139, 148, 158, 0.1);
+      color: var(--gray);
+      border: 1px solid rgba(139, 148, 158, 0.2);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* ── Session meta row ── */
+    .session-meta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .meta-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .meta-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+    }
+
+    .meta-value {
+      font-size: 12px;
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .meta-value.wd {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* ── Tool chips ── */
+    .tool-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-bottom: 14px;
+    }
+
+    .tool-chip {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px 8px;
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: monospace;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .tool-chip .count {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* ── Token bar ── */
+    .token-section {
+      border-top: 1px solid var(--border);
+      padding-top: 12px;
+    }
+
+    .token-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .token-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--text-muted);
+    }
+
+    .token-total {
+      font-size: 12px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+    }
+
+    .token-bar {
+      height: 6px;
+      border-radius: 4px;
+      background: var(--surface2);
+      overflow: hidden;
+      display: flex;
+      margin-bottom: 8px;
+    }
+
+    .token-segment {
+      height: 100%;
+      transition: width 0.6s ease;
+    }
+
+    .seg-input { background: var(--input-color); }
+    .seg-output { background: var(--output-color); }
+    .seg-cache-read { background: var(--cache-read-color); }
+    .seg-cache-create { background: var(--cache-create-color); }
+
+    .token-legend {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+    }
+
+    .legend-val {
+      font-weight: 600;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .cost-badge {
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--yellow);
+      font-weight: 600;
+    }
+
+    /* ── No sessions ── */
+    .empty-state {
+      grid-column: 1 / -1;
+      background: var(--surface);
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      padding: 48px 24px;
+      text-align: center;
+    }
+
+    .empty-state h3 {
+      font-size: 16px;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+
+    .empty-state p {
+      color: var(--text-muted);
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+
+    .code-block {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      color: var(--green);
+      text-align: left;
+      display: inline-block;
+      line-height: 1.8;
+      max-width: 560px;
+    }
+
+    /* ── OTEL hint banner ── */
+    .otel-hint {
+      background: rgba(88, 166, 255, 0.07);
+      border: 1px solid rgba(88, 166, 255, 0.2);
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .otel-hint-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+
+    .otel-hint-body { flex: 1; }
+
+    .otel-hint-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent2);
+      margin-bottom: 4px;
+    }
+
+    .otel-hint-text {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .otel-hint code {
+      background: var(--surface2);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-family: monospace;
+      color: var(--green);
+      font-size: 11px;
+    }
+
+    /* ── Delete button ── */
+    .delete-btn {
+      background: transparent;
+      border: 1px solid rgba(248, 81, 73, 0.3);
+      color: var(--red);
+      border-radius: 6px;
+      padding: 3px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+      flex-shrink: 0;
+    }
+
+    .delete-btn:hover {
+      background: rgba(248, 81, 73, 0.15);
+      border-color: var(--red);
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 800px) {
+      .stats-bar { grid-template-columns: repeat(2, 1fr); }
+      .sessions-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    Claude Dashboard
+  </div>
+  <div class="header-meta">
+    <span><span class="ws-dot" id="ws-dot"></span><span id="ws-status">Connecting…</span></span>
+    <span id="last-updated">—</span>
+  </div>
+</header>
+
+<main>
+  <!-- Stats bar -->
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-label">Active Sessions</div>
+      <div class="stat-value green" id="stat-running">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Sessions</div>
+      <div class="stat-value" id="stat-total">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Tokens (OTEL)</div>
+      <div class="stat-value accent" id="stat-tokens">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Tool Calls</div>
+      <div class="stat-value blue" id="stat-calls">—</div>
+    </div>
+  </div>
+
+  <!-- OTEL hint -->
+  <div class="otel-hint" id="otel-hint">
+    <div class="otel-hint-icon">📡</div>
+    <div class="otel-hint-body">
+      <div class="otel-hint-title">Enable real-time token metrics via OpenTelemetry</div>
+      <div class="otel-hint-text">
+        Start Claude Code with these env vars to stream token usage to this dashboard:<br>
+        <code>CLAUDE_CODE_ENABLE_TELEMETRY=1</code>
+        <code>OTEL_METRICS_EXPORTER=otlp</code>
+        <code>OTEL_EXPORTER_OTLP_PROTOCOL=http/json</code>
+        <code>OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:3000</code>
+        <code>OTEL_METRIC_EXPORT_INTERVAL=5000</code>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sessions -->
+  <div class="section-header">
+    <span class="section-title">Sessions</span>
+  </div>
+  <div class="sessions-grid" id="sessions-grid">
+    <div class="empty-state">
+      <h3>Waiting for sessions…</h3>
+      <p>No Claude Code sessions found yet. Ensure Claude Code is running on this machine.</p>
+    </div>
+  </div>
+</main>
+
+<script>
+  // ── Utilities ──────────────────────────────────────────────────────────────
+  function fmt(n) {
+    if (n === null || n === undefined) return '—';
+    if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+    if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+    if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+    return String(n);
+  }
+
+  function fmtTime(ms) {
+    if (!ms) return '—';
+    const d = new Date(ms);
+    return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function fmtAgo(ms) {
+    if (!ms) return '—';
+    const diff = Date.now() - ms;
+    if (diff < 5000) return 'just now';
+    if (diff < 60000) return Math.floor(diff / 1000) + 's ago';
+    if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+    return Math.floor(diff / 3600000) + 'h ago';
+  }
+
+  function shortId(id) {
+    if (!id) return '—';
+    return id.length > 20 ? id.slice(0, 8) + '…' + id.slice(-6) : id;
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+  function renderSessions(sessions) {
+    const grid = document.getElementById('sessions-grid');
+    const hint = document.getElementById('otel-hint');
+
+    if (!sessions || sessions.length === 0) {
+      grid.innerHTML = `<div class="empty-state">
+        <h3>No sessions found</h3>
+        <p>No Claude Code sessions detected yet.</p>
+        <div class="code-block">
+          CLAUDE_CODE_ENABLE_TELEMETRY=1 \\<br>
+          OTEL_METRICS_EXPORTER=otlp \\<br>
+          OTEL_EXPORTER_OTLP_PROTOCOL=http/json \\<br>
+          OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:3000 \\<br>
+          OTEL_METRIC_EXPORT_INTERVAL=5000 \\<br>
+          claude
+        </div>
+      </div>`;
+      updateStats(sessions);
+      return;
+    }
+
+    // Check if any session has OTEL data
+    const hasOtel = sessions.some(s => s.tokens);
+    hint.style.display = hasOtel ? 'none' : '';
+
+    grid.innerHTML = sessions.map(s => renderCard(s)).join('');
+    updateStats(sessions);
+  }
+
+  function renderCard(s) {
+    const status = s.status || 'stopped';
+    const tokens = s.tokens || {};
+    const totalTokens = (tokens.input || 0) + (tokens.output || 0) + (tokens.cache_read || 0) + (tokens.cache_creation || 0);
+
+    // Tool chips
+    const toolEntries = Object.entries(s.tool_counts || {}).sort((a, b) => b[1] - a[1]);
+    const chips = toolEntries.slice(0, 8).map(([tool, count]) =>
+      `<div class="tool-chip"><span>${tool}</span><span class="count">${count}</span></div>`
+    ).join('');
+
+    // Token bar
+    let tokenBar = '';
+    let tokenLegend = '';
+    if (totalTokens > 0) {
+      const pct = (n) => ((n / totalTokens) * 100).toFixed(1) + '%';
+      tokenBar = `
+        <div class="token-bar">
+          <div class="token-segment seg-input" style="width:${pct(tokens.input||0)}"></div>
+          <div class="token-segment seg-output" style="width:${pct(tokens.output||0)}"></div>
+          <div class="token-segment seg-cache-read" style="width:${pct(tokens.cache_read||0)}"></div>
+          <div class="token-segment seg-cache-create" style="width:${pct(tokens.cache_creation||0)}"></div>
+        </div>`;
+      tokenLegend = `
+        <div class="token-legend">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--input-color)"></div>In <span class="legend-val">${fmt(tokens.input||0)}</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--output-color)"></div>Out <span class="legend-val">${fmt(tokens.output||0)}</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--cache-read-color)"></div>Cache↑ <span class="legend-val">${fmt(tokens.cache_read||0)}</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--cache-create-color)"></div>Cache+ <span class="legend-val">${fmt(tokens.cache_creation||0)}</span></div>
+          ${tokens.cost ? `<div class="cost-badge">≈$${tokens.cost.toFixed(4)}</div>` : ''}
+        </div>`;
+    } else {
+      tokenBar = `<div class="token-bar"><div class="token-segment seg-input" style="width:0%"></div></div>`;
+      tokenLegend = `<div class="token-legend" style="color:var(--text-muted);font-size:11px">No OTEL token data — see setup hint above</div>`;
+    }
+
+    const wd = s.working_dir ? s.working_dir.replace(/^\/home\/[^/]+/, '~') : '—';
+
+    return `
+      <div class="session-card ${status}">
+        <div class="session-card-header">
+          <div class="session-id">${s.id}</div>
+          <button class="delete-btn" onclick="deleteSession('${s.id}')" title="Remove session">Remove</button>
+          <div class="status-badge ${status}">${status}</div>
+        </div>
+        <div class="session-meta">
+          <div class="meta-item">
+            <span class="meta-label">PID</span>
+            <span class="meta-value">${s.pid || '—'}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Tool Calls</span>
+            <span class="meta-value">${s.total_calls || 0}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Started</span>
+            <span class="meta-value">${fmtTime(s.started_at)}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Last Active</span>
+            <span class="meta-value">${fmtAgo(s.updated_at)}</span>
+          </div>
+          <div class="meta-item" style="grid-column:1/-1">
+            <span class="meta-label">Working Dir</span>
+            <span class="meta-value wd" title="${s.working_dir || ''}">${wd}</span>
+          </div>
+        </div>
+        ${chips ? `<div class="tool-chips">${chips}</div>` : ''}
+        <div class="token-section">
+          <div class="token-header">
+            <span class="token-title">Tokens</span>
+            ${totalTokens > 0 ? `<span class="token-total">${fmt(totalTokens)} total</span>` : ''}
+          </div>
+          ${tokenBar}
+          ${tokenLegend}
+        </div>
+      </div>`;
+  }
+
+  function updateStats(sessions) {
+    const running = (sessions || []).filter(s => s.status === 'running').length;
+    const total = (sessions || []).length;
+    const totalTokens = (sessions || []).reduce((sum, s) => {
+      const t = s.tokens || {};
+      return sum + (t.input||0) + (t.output||0) + (t.cache_read||0) + (t.cache_creation||0);
+    }, 0);
+    const totalCalls = (sessions || []).reduce((sum, s) => sum + (s.total_calls || 0), 0);
+
+    document.getElementById('stat-running').textContent = running;
+    document.getElementById('stat-total').textContent = total;
+    document.getElementById('stat-tokens').textContent = totalTokens > 0 ? fmt(totalTokens) : '—';
+    document.getElementById('stat-calls').textContent = fmt(totalCalls);
+    document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  }
+
+  // ── WebSocket ──────────────────────────────────────────────────────────────
+  let ws, reconnectTimer;
+  const dot = document.getElementById('ws-dot');
+  const wsStatus = document.getElementById('ws-status');
+
+  function connect() {
+    const url = `ws://${location.host}/ws`;
+    ws = new WebSocket(url);
+
+    ws.onopen = () => {
+      dot.className = 'ws-dot connected';
+      wsStatus.textContent = 'Live';
+      clearTimeout(reconnectTimer);
+    };
+
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'sessions') renderSessions(msg.data);
+        if (msg.type === 'metrics_update') fetchSessions();
+      } catch {}
+    };
+
+    ws.onclose = () => {
+      dot.className = 'ws-dot error';
+      wsStatus.textContent = 'Reconnecting…';
+      reconnectTimer = setTimeout(connect, 2500);
+    };
+
+    ws.onerror = () => {
+      dot.className = 'ws-dot error';
+      wsStatus.textContent = 'Error';
+    };
+  }
+
+  function deleteSession(id) {
+    fetch('/api/sessions/' + encodeURIComponent(id), { method: 'DELETE' })
+      .then(r => { if (r.ok) fetchSessions(); })
+      .catch(() => {});
+  }
+
+  function fetchSessions() {
+    fetch('/api/sessions').then(r => r.json()).then(renderSessions).catch(() => {});
+  }
+
+  connect();
+  fetchSessions();
+</script>
+
+</body>
+</html>
